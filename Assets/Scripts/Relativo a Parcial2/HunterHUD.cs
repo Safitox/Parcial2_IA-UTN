@@ -3,9 +3,9 @@ using UnityEngine.UI;
 
 public class HunterHUD : MonoBehaviour
 {
-    public Text stateText;
-    public Text gatherText;
-    public Text wolfText;
+    public TMPro.TextMeshProUGUI stateText;
+    public TMPro.TextMeshProUGUI gatherText;
+    public TMPro.TextMeshProUGUI wolfText;
 
     void Update()
     {
