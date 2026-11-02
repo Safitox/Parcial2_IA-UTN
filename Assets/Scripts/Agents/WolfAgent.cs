@@ -3,8 +3,6 @@ using UnityEngine;
 
 public class WolfAgent : MonoBehaviour
 {
-    public static readonly List<WolfAgent> All = new List<WolfAgent>();
-
     public enum Mode
     {
         Patrol,
@@ -17,6 +15,7 @@ public class WolfAgent : MonoBehaviour
     [SerializeField] float viewAngle = 110f;
     [SerializeField] float captureRadius = 1.5f;
     [SerializeField] float searchDuration = 5f;
+    [SerializeField] float alertDistance = 100f;
     [SerializeField] string wolfName = "Lobito";
 
     public Transform[] patrolPoints;
@@ -24,6 +23,7 @@ public class WolfAgent : MonoBehaviour
 
     MoverEnGraph mover = new MoverEnGraph();
     List<Vector3> patrol = new List<Vector3>();
+    HunterNPC trackedHunter;
     int waypoint;
     float searchTimer;
     bool searchingArea;
@@ -32,91 +32,150 @@ public class WolfAgent : MonoBehaviour
     Vector3 lastKnown;
     Renderer display;
 
-    void OnEnable()
-    {
-        All.Add(this);
-    }
-
-    void OnDisable()
-    {
-        All.Remove(this);
-    }
-
     void Start()
     {
         display = GetComponent<Renderer>();
 
-        foreach (Transform point in patrolPoints)
+        if (patrolPoints != null)
         {
-            if (point != null)
+            foreach (Transform point in patrolPoints)
             {
-                patrol.Add(point.position);
+                if (point != null)
+                {
+                    patrol.Add(point.position);
+                }
             }
         }
 
-        CurrentMode = Mode.Patrol;
+        ReturnToPatrol();
 
-        if (patrol.Count > 0)
+        if (patrol.Count == 0)
         {
-            mover.Set(transform.position, patrol[0], true);
+            Debug.LogWarning(name + " no tiene waypoints asignados.");
         }
-        else
+    }
+
+    // Devuelve el Cazador solo si realmente está dentro del campo de visión.
+    HunterNPC FindVisibleHunter()
+    {
+        if (NavGraph.Instance == null)
         {
-            Debug.Log(name + " no tiene waypoints asignados.");
+            return null;
         }
+
+        Collider[] nearby = Physics.OverlapSphere(transform.position, viewDistance, -1, QueryTriggerInteraction.Ignore);
+
+        foreach (Collider item in nearby)
+        {
+            HunterNPC hunter = item.GetComponentInParent<HunterNPC>();
+
+            if (hunter == null || hunter.IsInactive)
+            {
+                continue;
+            }
+
+            if (NavGraph.Instance.IsSafe(hunter.transform.position))
+            {
+                continue;
+            }
+
+            Vector3 direction = hunter.transform.position - transform.position;
+            direction.y = 0f;
+            float distance = direction.magnitude;
+
+            if (distance > viewDistance || distance < 0.001f)
+            {
+                continue;
+            }
+
+            if (Vector3.Angle(transform.forward, direction) > viewAngle / 2f)
+            {
+                continue;
+            }
+
+            if (HasLineOfSight(hunter))
+            {
+                return hunter;
+            }
+        }
+
+        return null;
+    }
+
+    bool HasLineOfSight(HunterNPC hunter)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.4f;
+        Vector3 destination = hunter.transform.position + Vector3.up * 0.4f;
+        Vector3 direction = destination - origin;
+        float distance = direction.magnitude;
+
+        RaycastHit[] hits = Physics.RaycastAll(origin, direction.normalized, distance, -1, QueryTriggerInteraction.Ignore);
+        float nearestDistance = float.MaxValue;
+        Collider nearestCollider = null;
+
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider.GetComponentInParent<WolfAgent>() == this)
+            {
+                continue;
+            }
+
+            if (hit.distance < nearestDistance)
+            {
+                nearestDistance = hit.distance;
+                nearestCollider = hit.collider;
+            }
+        }
+
+        if (nearestCollider == null)
+        {
+            return true;
+        }
+
+        return nearestCollider.GetComponentInParent<HunterNPC>() == hunter;
     }
 
     public bool CanSeeHunter()
     {
-        HunterNPC hunter = HunterNPC.Instance;
+        return FindVisibleHunter() != null;
+    }
 
-        if (hunter == null || hunter.IsInactive)
+    void SendAlert()
+    {
+        Collider[] nearby = Physics.OverlapSphere(transform.position, alertDistance, -1, QueryTriggerInteraction.Ignore);
+        HashSet<WolfAgent> alerted = new HashSet<WolfAgent>();
+
+        foreach (Collider item in nearby)
         {
-            return false;
+            WolfAgent other = item.GetComponentInParent<WolfAgent>();
+
+            if (other == null || other == this || alerted.Contains(other))
+            {
+                continue;
+            }
+
+            alerted.Add(other);
+            other.HearAlert(lastKnown);
         }
 
-        if (NavGraph.Instance.IsSafe(hunter.transform.position))
-        {
-            return false;
-        }
-
-        Vector3 direction = hunter.transform.position - transform.position;
-        direction.y = 0;
-        float distance = direction.magnitude;
-
-        if (distance > viewDistance || distance < 0.001f)
-        {
-            return false;
-        }
-
-        if (Vector3.Angle(transform.forward, direction) > viewAngle / 2f)
-        {
-            return false;
-        }
-
-        Vector3 origin = transform.position + Vector3.up * 0.4f;
-        RaycastHit hit;
-
-        if (Physics.Raycast(origin, direction.normalized, out hit, distance, ~0, QueryTriggerInteraction.Ignore))
-        {
-            return hit.collider.GetComponentInParent<HunterNPC>() != null;
-        }
-
-        return true;
+        Debug.Log("LOBO " + wolfName + ": AULLIDO -> " + lastKnown);
     }
 
     public void HearAlert(Vector3 position)
     {
-        if (NavGraph.Instance.IsSafe(position))
+        if (NavGraph.Instance == null || NavGraph.Instance.IsSafe(position))
         {
             return;
         }
 
+        // La alerta transmite una posición, no una referencia permanente al Cazador.
+        trackedHunter = null;
         lastKnown = position;
         searchTimer = searchDuration;
         searchingArea = false;
-        repathTimer = 0;
+        repathTimer = 0f;
         CurrentMode = Mode.Investigate;
+
         if (!mover.Set(transform.position, lastKnown, true))
         {
             ReturnToPatrol();
@@ -125,9 +184,7 @@ public class WolfAgent : MonoBehaviour
 
     void Update()
     {
-        HunterNPC hunter = HunterNPC.Instance;
-
-        if (hunter == null || NavGraph.Instance == null)
+        if (NavGraph.Instance == null)
         {
             return;
         }
@@ -135,132 +192,123 @@ public class WolfAgent : MonoBehaviour
         howlCooldown -= Time.deltaTime;
         repathTimer -= Time.deltaTime;
 
-        if (hunter.IsInactive || NavGraph.Instance.IsSafe(hunter.transform.position))
+        // Solo se conserva esta referencia durante una persecución directa.
+        // Se usa para cancelar la persecución cuando el objetivo desaparece o está a salvo.
+        if (trackedHunter != null)
         {
-            if (CurrentMode != Mode.Patrol)
+            if (trackedHunter.IsInactive || NavGraph.Instance.IsSafe(trackedHunter.transform.position))
             {
                 ReturnToPatrol();
             }
         }
-        else if (CanSeeHunter())
+
+        HunterNPC visibleHunter = FindVisibleHunter();
+
+        if (visibleHunter != null)
         {
-            lastKnown = hunter.transform.position;
-
-            if (CurrentMode != Mode.Pursue && howlCooldown <= 0)
-            {
-                howlCooldown = 3f;
-                Debug.Log("LOBO " + wolfName + ": AULLIDO -> " + lastKnown);
-
-                foreach (WolfAgent other in All)
-                {
-                    if (other != this)
-                    {
-                        other.HearAlert(lastKnown);
-                    }
-                }
-            }
-
-            CurrentMode = Mode.Pursue;
-
-            if (repathTimer <= 0)
-            {
-                mover.Set(transform.position, lastKnown, true);
-                repathTimer = 0.45f;
-            }
-
-            if (Vector3.Distance(transform.position, hunter.transform.position) < captureRadius)
-            {
-                hunter.CapturedByWolf();
-            }
+            ChaseHunter(visibleHunter);
         }
         else if (CurrentMode == Mode.Pursue)
         {
+            trackedHunter = null;
             CurrentMode = Mode.Investigate;
             searchTimer = searchDuration;
             searchingArea = false;
+
             if (!mover.Set(transform.position, lastKnown, true))
             {
                 ReturnToPatrol();
             }
         }
 
-        if (CurrentMode == Mode.Patrol)
+        switch (CurrentMode)
         {
-            if (patrol.Count == 0)
+            case Mode.Patrol:
+                UpdatePatrol();
+                break;
+
+            case Mode.Pursue:
+                mover.Move(transform, speed);
+                break;
+
+            case Mode.Investigate:
+                UpdateInvestigation();
+                break;
+        }
+
+        UpdateFeedback();
+    }
+
+    void ChaseHunter(HunterNPC hunter)
+    {
+        trackedHunter = hunter;
+        lastKnown = hunter.transform.position;
+
+        if (CurrentMode != Mode.Pursue && howlCooldown <= 0f)
+        {
+            howlCooldown = 3f;
+            SendAlert();
+        }
+
+        CurrentMode = Mode.Pursue;
+
+        if (repathTimer <= 0f)
+        {
+            mover.Set(transform.position, lastKnown, true);
+            repathTimer = 0.45f;
+        }
+
+        if (Vector3.Distance(transform.position, hunter.transform.position) < captureRadius)
+        {
+            hunter.CapturedByWolf();
+        }
+    }
+
+    void UpdatePatrol()
+    {
+        if (patrol.Count == 0)
+        {
+            return;
+        }
+
+        if (mover.Move(transform, speed))
+        {
+            waypoint++;
+
+            if (waypoint >= patrol.Count)
             {
-                return;
+                waypoint = 0;
             }
 
-            if (mover.Move(transform, speed))
+            mover.Set(transform.position, patrol[waypoint], true);
+        }
+    }
+
+    void UpdateInvestigation()
+    {
+        bool reached = mover.Move(transform, speed);
+
+        if (!searchingArea)
+        {
+            if (reached)
             {
-                waypoint++;
-
-                if (waypoint >= patrol.Count)
-                {
-                    waypoint = 0;
-                }
-
-                mover.Set(transform.position, patrol[waypoint], true);
+                searchingArea = true;
+                ChooseSearchPoint();
             }
+
+            return;
         }
-        else
+
+        searchTimer -= Time.deltaTime;
+
+        if (searchTimer <= 0f)
         {
-            bool reached = mover.Move(transform, speed);
-
-            if (CurrentMode == Mode.Investigate)
-            {
-                if (!searchingArea)
-                {
-                    if (reached)
-                    {
-                        searchingArea = true;
-                        ChooseSearchPoint();
-                    }
-                }
-                else
-                {
-                    searchTimer -= Time.deltaTime;
-
-                    if (searchTimer <= 0)
-                    {
-                        ReturnToPatrol();
-                    }
-                    else if (reached)
-                    {
-                        ChooseSearchPoint();
-                    }
-                }
-            }
+            ReturnToPatrol();
         }
-
-        if (CurrentMode == Mode.Patrol)
+        else if (reached)
         {
-            mover.DebugDraw(Color.gray);
+            ChooseSearchPoint();
         }
-        else
-        {
-            mover.DebugDraw(Color.red);
-        }
-
-        if (display != null)
-        {
-            switch (CurrentMode)
-            {
-                case Mode.Pursue:
-                    display.material.color = Color.red;
-                    break;
-
-                case Mode.Investigate:
-                    display.material.color = Color.yellow;
-                    break;
-
-                default:
-                    display.material.color = new Color(0.6f, 0.2f, 0.1f);
-                    break;
-            }
-        }
-
-        Debug.DrawLine(transform.position + Vector3.up, lastKnown + Vector3.up, Color.magenta);
     }
 
     void ChooseSearchPoint()
@@ -302,12 +350,48 @@ public class WolfAgent : MonoBehaviour
     void ReturnToPatrol()
     {
         CurrentMode = Mode.Patrol;
+        trackedHunter = null;
         searchingArea = false;
         lastKnown = Vector3.zero;
 
         if (patrol.Count > 0)
         {
             mover.Set(transform.position, patrol[waypoint], true);
+        }
+    }
+
+    void UpdateFeedback()
+    {
+        if (CurrentMode == Mode.Patrol)
+        {
+            mover.DebugDraw(Color.gray);
+        }
+        else
+        {
+            mover.DebugDraw(Color.red);
+        }
+
+        if (display != null)
+        {
+            switch (CurrentMode)
+            {
+                case Mode.Pursue:
+                    display.material.color = Color.red;
+                    break;
+
+                case Mode.Investigate:
+                    display.material.color = Color.yellow;
+                    break;
+
+                default:
+                    display.material.color = new Color(0.6f, 0.2f, 0.1f);
+                    break;
+            }
+        }
+
+        if (CurrentMode != Mode.Patrol)
+        {
+            Debug.DrawLine(transform.position + Vector3.up, lastKnown + Vector3.up, Color.magenta);
         }
     }
 
@@ -322,7 +406,10 @@ public class WolfAgent : MonoBehaviour
         Gizmos.DrawRay(transform.position, left * viewDistance);
         Gizmos.DrawRay(transform.position, right * viewDistance);
 
-        Gizmos.color = Color.magenta;
-        Gizmos.DrawSphere(lastKnown, 0.3f);
+        if (CurrentMode != Mode.Patrol)
+        {
+            Gizmos.color = Color.magenta;
+            Gizmos.DrawSphere(lastKnown, 0.3f);
+        }
     }
 }

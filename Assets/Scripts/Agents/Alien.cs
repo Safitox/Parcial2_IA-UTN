@@ -31,8 +31,9 @@ public class Alien : MonoBehaviour
     [SerializeField, Range(0f, 3f)] private float _alignmentWeight = 1f;
 
     private ObjectOfInterest _currentTarget;
-    private static readonly List<Alien> _allAgents = new List<Alien>();
-    public static List<Alien> AllAgents => _allAgents;
+    private readonly List<Alien> _nearbyAgents = new List<Alien>();
+    private HunterNPC _nearbyHunter;
+    private bool _hunterDetected;
 
     private Renderer[] _renderers;
     private Collider[] _colliders;
@@ -73,24 +74,16 @@ public class Alien : MonoBehaviour
         }
 
         _respawnTimer = 0f;
-        HunterNPC hunter = GetHunter();
-        bool hunterDetected = false;
+        DetectNearbyObjects();
 
-        if (hunter != null)
-        {
-            hunterDetected = InRange(hunter.transform.position, _viewRadius);
-        }
-
-        if (hunterDetected)
+        if (_hunterDetected)
         {
             _currentTarget = null;
             _objectOfInterestDamageTimer = 0f;
-            _velocity += CalculateEvade(hunter);
+            _velocity += CalculateEvade(_nearbyHunter);
         }
         else
         {
-            _currentTarget = GetClosestObject();
-
             if (_currentTarget != null)
             {
                 Vector3 difference = _currentTarget.transform.position - transform.position;
@@ -98,7 +91,7 @@ public class Alien : MonoBehaviour
                 float damageRadiusSquared = _distSquaredToobjectOfInterestDetection * _distSquaredToobjectOfInterestDetection;
 
                 _velocity += CalculateArrive(_currentTarget.transform.position);
-                _velocity += CalculateSeparation(_allAgents, _separationRadius) * _separationWeight;
+                _velocity += CalculateSeparation(_nearbyAgents, _separationRadius) * _separationWeight;
 
                 if (distanceSquared < damageRadiusSquared)
                 {
@@ -171,7 +164,7 @@ public class Alien : MonoBehaviour
         float separationRadiusSquared = _separationRadius * _separationRadius;
         float viewRadiusSquared = _viewRadius * _viewRadius;
 
-        foreach (Alien agent in _allAgents)
+        foreach (Alien agent in _nearbyAgents)
         {
             if (agent == null || agent == this || agent.IsDead)
             {
@@ -332,16 +325,6 @@ public class Alien : MonoBehaviour
         return new Vector3(x, _movementHeight, z);
     }
 
-    private void OnEnable()
-    {
-        _allAgents.Add(this);
-    }
-
-    private void OnDisable()
-    {
-        _allAgents.Remove(this);
-    }
-
     public void TakeDamage(float damage)
     {
         if (_isDead)
@@ -381,33 +364,59 @@ public class Alien : MonoBehaviour
         }
     }
 
-    private ObjectOfInterest GetClosestObject()
+    private void DetectNearbyObjects()
     {
-        ObjectOfInterest closest = null;
-        float minDistanceSquared = _viewRadius * _viewRadius;
+        _nearbyAgents.Clear();
+        _nearbyHunter = null;
+        _hunterDetected = false;
+        _currentTarget = null;
 
-        foreach (ObjectOfInterest obj in ObjectsOfInterestManager.Items)
+        float radius = Mathf.Max(_viewRadius, _separationRadius);
+        Collider[] nearby = Physics.OverlapSphere(transform.position, radius, -1, QueryTriggerInteraction.Collide);
+        float closestObjectDistance = _viewRadius * _viewRadius;
+        float closestHunterDistance = _viewRadius * _viewRadius;
+
+        foreach (Collider collider in nearby)
         {
-            if (obj == null)
+            Alien agent = collider.GetComponentInParent<Alien>();
+
+            if (agent != null && agent != this && !agent.IsDead)
             {
-                continue;
+                if (!_nearbyAgents.Contains(agent))
+                {
+                    _nearbyAgents.Add(agent);
+                }
             }
 
-            float distanceSquared = (obj.transform.position - transform.position).sqrMagnitude;
+            HunterNPC hunter = collider.GetComponentInParent<HunterNPC>();
 
-            if (distanceSquared < minDistanceSquared)
+            if (hunter != null && !hunter.IsInactive)
             {
-                minDistanceSquared = distanceSquared;
-                closest = obj;
+                Vector3 difference = hunter.transform.position - transform.position;
+                float distance = difference.sqrMagnitude;
+
+                if (distance < closestHunterDistance)
+                {
+                    closestHunterDistance = distance;
+                    _nearbyHunter = hunter;
+                    _hunterDetected = true;
+                }
+            }
+
+            ObjectOfInterest interest = collider.GetComponentInParent<ObjectOfInterest>();
+
+            if (interest != null)
+            {
+                Vector3 difference = interest.transform.position - transform.position;
+                float distance = difference.sqrMagnitude;
+
+                if (distance < closestObjectDistance)
+                {
+                    closestObjectDistance = distance;
+                    _currentTarget = interest;
+                }
             }
         }
-
-        return closest;
-    }
-
-    private HunterNPC GetHunter()
-    {
-        return HunterNPC.Instance;
     }
 
     private void Respawn()
@@ -451,8 +460,6 @@ public class Alien : MonoBehaviour
 
     private void ChangeVisualFeedback()
     {
-        HunterNPC hunter = GetHunter();
-
         if (_isDead)
         {
             SetColor(Color.black);
@@ -461,7 +468,7 @@ public class Alien : MonoBehaviour
         {
             SetColor(Color.green);
         }
-        else if (hunter != null && InRange(hunter.transform.position, _viewRadius))
+        else if (_hunterDetected)
         {
             SetColor(Color.red);
         }

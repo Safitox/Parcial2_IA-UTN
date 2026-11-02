@@ -3,14 +3,14 @@ using UnityEngine.UI;
 
 public class HunterHUD : MonoBehaviour
 {
+    [SerializeField] private HunterNPC hunter;
+
     public TMPro.TextMeshProUGUI stateText;
     public TMPro.TextMeshProUGUI gatherText;
     public TMPro.TextMeshProUGUI wolfText;
 
     void Update()
     {
-        HunterNPC hunter = HunterNPC.Instance;
-
         if (hunter == null)
         {
             return;

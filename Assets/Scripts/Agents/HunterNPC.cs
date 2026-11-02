@@ -3,8 +3,6 @@ using UnityEngine;
 
 public class HunterNPC : MonoBehaviour
 {
-    public static HunterNPC Instance { get; private set; }
-
     [Header("Parcial 2 - Objetivos")]
     public int RequiredGathers = 3;
     public float RespawnTime = 5f;
@@ -96,13 +94,6 @@ public class HunterNPC : MonoBehaviour
 
     void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
-        Instance = this;
         renderers = GetComponentsInChildren<Renderer>();
         colliders = GetComponentsInChildren<Collider>();
     }
@@ -168,30 +159,57 @@ public class HunterNPC : MonoBehaviour
 
     public bool DetectWolf()
     {
-        foreach (WolfAgent wolf in WolfAgent.All)
+        Collider[] nearby = Physics.OverlapSphere(transform.position, _viewRadius, -1, QueryTriggerInteraction.Ignore);
+
+        foreach (Collider item in nearby)
         {
+            WolfAgent wolf = item.GetComponentInParent<WolfAgent>();
+
             if (wolf == null)
             {
                 continue;
             }
 
-            Vector3 direction = wolf.transform.position - transform.position;
-
-            if (direction.sqrMagnitude > _viewRadius * _viewRadius)
-            {
-                continue;
-            }
-
-            RaycastHit hit;
-            bool blocked = Physics.Raycast(transform.position + Vector3.up * 0.4f, direction.normalized, out hit, direction.magnitude, -1, QueryTriggerInteraction.Ignore);
-
-            if (!blocked || hit.collider.GetComponentInParent<WolfAgent>() == wolf)
+            if (CanSee(item.bounds.center, wolf.transform))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    bool CanSee(Vector3 targetPosition, Transform target)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.4f;
+        Vector3 direction = targetPosition - origin;
+        float distance = direction.magnitude;
+
+        if (distance <= 0.001f)
+        {
+            return true;
+        }
+
+        RaycastHit[] hits = Physics.RaycastAll(origin, direction.normalized, distance, -1, QueryTriggerInteraction.Ignore);
+
+        foreach (RaycastHit hit in hits)
+        {
+            Transform hitTransform = hit.collider.transform;
+
+            if (hitTransform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            if (hitTransform.IsChildOf(target))
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     public void CapturedByWolf()
@@ -284,10 +302,13 @@ public class HunterNPC : MonoBehaviour
     {
         Alien closest = null;
         float minDistance = _viewRadius * _viewRadius;
+        Collider[] nearby = Physics.OverlapSphere(transform.position, _viewRadius, -1, QueryTriggerInteraction.Ignore);
 
-        foreach (Alien boid in Alien.AllAgents)
+        foreach (Collider item in nearby)
         {
-            if (boid == null || boid.IsDead != dead || (dead && boid.IsCollected))
+            Alien boid = item.GetComponentInParent<Alien>();
+
+            if (boid == null || boid.IsDead != dead || boid.IsCollected)
             {
                 continue;
             }
@@ -300,10 +321,7 @@ public class HunterNPC : MonoBehaviour
                 continue;
             }
 
-            RaycastHit hit;
-            bool blocked = Physics.Raycast(transform.position + Vector3.up * 0.4f, direction.normalized, out hit, direction.magnitude, -1, QueryTriggerInteraction.Ignore);
-
-            if (blocked && hit.collider.GetComponentInParent<Alien>() != boid)
+            if (!CanSee(item.bounds.center, boid.transform))
             {
                 continue;
             }
@@ -367,14 +385,6 @@ public class HunterNPC : MonoBehaviour
             {
                 item.material.color = color;
             }
-        }
-    }
-
-    void OnDestroy()
-    {
-        if (Instance == this)
-        {
-            Instance = null;
         }
     }
 

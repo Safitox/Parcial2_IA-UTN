@@ -6,11 +6,18 @@ public class Universe : MonoBehaviour
     [SerializeField] private float _width = 60f;
     [SerializeField] private float _height = 35f;
     [SerializeField] private float _respawnDistanceFromHunter = 10f;
+    [SerializeField] private HunterNPC hunter;
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     public Vector3 GetRandomPositionAwayFrom(int maxAttempts = 100)
@@ -24,10 +31,20 @@ public class Universe : MonoBehaviour
 
         for (int i = 0; i < maxAttempts; i++)
         {
-            Vector3 candidate = new Vector3(Random.Range(-halfWidth, halfWidth),0f, Random.Range(-halfHeight, halfHeight));
-            float distanceSqr = (candidate - HunterNPC.Instance.transform.position).sqrMagnitude;
+            Vector3 candidate = new Vector3(Random.Range(-halfWidth, halfWidth), 0f, Random.Range(-halfHeight, halfHeight));
+            if (hunter == null || hunter.IsInactive)
+            {
+                return candidate;
+            }
 
-            if (distanceSqr >= minimumDistanceSqr) return candidate;
+            Vector3 difference = candidate - hunter.transform.position;
+            difference.y = 0f;
+            float distanceSqr = difference.sqrMagnitude;
+
+            if (distanceSqr >= minimumDistanceSqr)
+            {
+                return candidate;
+            }
 
             if (distanceSqr > bestDistanceSqr)
             {
@@ -36,7 +53,7 @@ public class Universe : MonoBehaviour
             }
         }
 
-        Debug.LogWarning("No se encontró una posición que cumpla la distancia mínima. Se utilizará la posición más alejada encontrada.");
+        Debug.Log("No se encontro una posicion a la distancia minima. Se usara la mas alejada encontrada.");
         return bestPosition;
     }
 

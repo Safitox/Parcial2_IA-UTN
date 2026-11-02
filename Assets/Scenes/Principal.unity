@@ -305,6 +305,7 @@ MonoBehaviour:
   _width: 60
   _height: 35
   _respawnDistanceFromHunter: 10
+  hunter: {fileID: 1644485083}
 --- !u!114 &224839650
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2000,6 +2001,17 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1383206664}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &1644485083 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5187760032170467710, guid: 7823c2fa1a619bc4da2f8ff32738dee8, type: 3}
+  m_PrefabInstance: {fileID: 369470385}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 95aed13990516eb4b931285e35be3adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HunterNPC
 --- !u!1 &1745965204
 GameObject:
   m_ObjectHideFlags: 0
@@ -15148,6 +15160,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 395f27d79ffd426f9fe02fd3526c6230, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HunterHUD
+  hunter: {fileID: 1644485083}
   stateText: {fileID: 663800752}
   gatherText: {fileID: 1878535165}
   wolfText: {fileID: 52110137}
