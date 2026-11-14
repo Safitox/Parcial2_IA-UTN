@@ -25,6 +25,7 @@ public class Alien : MonoBehaviour
     private float _objectOfInterestDamageTimer = 0f;
 
     [Header("Flocking")]
+    [SerializeField] private float _flockingRadius = 5f;
     [SerializeField] private float _separationRadius = 4f;
     [SerializeField, Range(0f, 3f)] private float _separationWeight = 0.8f;
     [SerializeField, Range(0f, 3f)] private float _cohesionWeight = 1f;
@@ -32,9 +33,11 @@ public class Alien : MonoBehaviour
 
     private ObjectOfInterest _currentTarget;
     private readonly List<Alien> _nearbyAgents = new List<Alien>();
+    private AgentSensor sensor;
     private HunterNPC _nearbyHunter;
     private bool _hunterDetected;
 
+    private AgentFeedback feedback;
     private Renderer[] _renderers;
     private Collider[] _colliders;
     private Vector3 _velocity;
@@ -43,6 +46,8 @@ public class Alien : MonoBehaviour
 
     private void Awake()
     {
+        sensor = GetComponent<AgentSensor>();
+        feedback = GetComponent<AgentFeedback>();
         _renderers = GetComponentsInChildren<Renderer>();
         _colliders = GetComponentsInChildren<Collider>();
     }
@@ -58,63 +63,68 @@ public class Alien : MonoBehaviour
     {
         if (_isDead)
         {
-            ChangeVisualFeedback();
-
-            if (_isCollected)
-            {
-                _respawnTimer += Time.deltaTime;
-
-                if (_respawnTimer >= _respawnTime)
-                {
-                    Respawn();
-                }
-            }
-
+            UpdateRespawn();
             return;
         }
 
         _respawnTimer = 0f;
         DetectNearbyObjects();
+        UpdateBehavior();
+        MoveAgent();
+        ChangeVisualFeedback();
+    }
 
+    private void UpdateRespawn()
+    {
+        ChangeVisualFeedback();
+        if (!_isCollected) return;
+        _respawnTimer += Time.deltaTime;
+        if (_respawnTimer >= _respawnTime) Respawn();
+    }
+
+    private void UpdateBehavior()
+    {
         if (_hunterDetected)
         {
             _currentTarget = null;
             _objectOfInterestDamageTimer = 0f;
             _velocity += CalculateEvade(_nearbyHunter);
+            return;
+        }
+
+        if (_currentTarget != null)
+        {
+            MoveToObject();
         }
         else
         {
-            if (_currentTarget != null)
-            {
-                Vector3 difference = _currentTarget.transform.position - transform.position;
-                float distanceSquared = difference.sqrMagnitude;
-                float damageRadiusSquared = _distSquaredToobjectOfInterestDetection * _distSquaredToobjectOfInterestDetection;
+            CalculateFlocking();
+        }
+    }
 
-                _velocity += CalculateArrive(_currentTarget.transform.position);
-                _velocity += CalculateSeparation(_nearbyAgents, _separationRadius) * _separationWeight;
+    private void MoveToObject()
+    {
+        Vector3 difference = _currentTarget.transform.position - transform.position;
+        float distanceSquared = difference.sqrMagnitude;
+        float damageRadiusSquared = _distSquaredToobjectOfInterestDetection * _distSquaredToobjectOfInterestDetection;
 
-                if (distanceSquared < damageRadiusSquared)
-                {
-                    _objectOfInterestDamageTimer -= Time.deltaTime;
+        _velocity += CalculateArrive(_currentTarget.transform.position);
+        _velocity += CalculateSeparation(_nearbyAgents, _separationRadius) * _separationWeight;
 
-                    if (_objectOfInterestDamageTimer <= 0f)
-                    {
-                        _currentTarget.TakeDamage(_objectOfInterestDamage);
-                        _objectOfInterestDamageTimer = _objectOfInterestDamageInterval;
-                    }
-                }
-                else
-                {
-                    _objectOfInterestDamageTimer = 0f;
-                }
-            }
-            else
-            {
-                CalculateFlocking();
-            }
+        if (distanceSquared >= damageRadiusSquared)
+        {
+            _objectOfInterestDamageTimer = 0f;
+            return;
         }
 
-        // Los Boids se mueven solo en X y Z.
+        _objectOfInterestDamageTimer -= Time.deltaTime;
+        if (_objectOfInterestDamageTimer > 0f) return;
+        _currentTarget.TakeDamage(_objectOfInterestDamage);
+        _objectOfInterestDamageTimer = _objectOfInterestDamageInterval;
+    }
+
+    private void MoveAgent()
+    {
         _velocity.y = 0f;
         _velocity = Vector3.ClampMagnitude(_velocity, _maxSpeed);
         Vector3 nextPosition = transform.position + _velocity * Time.deltaTime;
@@ -137,12 +147,7 @@ public class Alien : MonoBehaviour
         correctedPosition.y = _movementHeight;
         transform.position = correctedPosition;
 
-        if (_velocity.sqrMagnitude > 0.001f)
-        {
-            transform.forward = _velocity.normalized;
-        }
-
-        ChangeVisualFeedback();
+        if (_velocity.sqrMagnitude > 0.001f) transform.forward = _velocity.normalized;
     }
 
     private Vector3 CalculateSteering(Vector3 desired)
@@ -162,7 +167,7 @@ public class Alien : MonoBehaviour
         int separationCount = 0;
         int flockingCount = 0;
         float separationRadiusSquared = _separationRadius * _separationRadius;
-        float viewRadiusSquared = _viewRadius * _viewRadius;
+        float viewRadiusSquared = _flockingRadius * _flockingRadius;
 
         foreach (Alien agent in _nearbyAgents)
         {
@@ -305,24 +310,7 @@ public class Alien : MonoBehaviour
 
     private Vector3 ConfineToHuntingArea(Vector3 position)
     {
-        float minX = NavGraph.Position(5, 6).x - 1.8f;
-        float maxX = NavGraph.Position(9, 6).x + 1.8f;
-        float minZ = NavGraph.Position(5, 6).z - 1.8f;
-        float maxZ = NavGraph.Position(5, 10).z + 1.8f;
-
-        if (position.x < minX || position.x > maxX)
-        {
-            _velocity.x = -_velocity.x;
-        }
-
-        if (position.z < minZ || position.z > maxZ)
-        {
-            _velocity.z = -_velocity.z;
-        }
-
-        float x = Mathf.Clamp(position.x, minX, maxX);
-        float z = Mathf.Clamp(position.z, minZ, maxZ);
-        return new Vector3(x, _movementHeight, z);
+        return NavGraph.Instance.ConfineToHunting(position, ref _velocity);
     }
 
     public void TakeDamage(float damage)
@@ -371,13 +359,16 @@ public class Alien : MonoBehaviour
         _hunterDetected = false;
         _currentTarget = null;
 
-        float radius = Mathf.Max(_viewRadius, _separationRadius);
-        Collider[] nearby = Physics.OverlapSphere(transform.position, radius, -1, QueryTriggerInteraction.Collide);
+        float radius = _viewRadius;
+        if (_separationRadius > radius) radius = _separationRadius;
+        if (_flockingRadius > radius) radius = _flockingRadius;
+        int count = sensor.Scan(radius, true);
         float closestObjectDistance = _viewRadius * _viewRadius;
         float closestHunterDistance = _viewRadius * _viewRadius;
 
-        foreach (Collider collider in nearby)
+        for (int i = 0; i < count; i++)
         {
+            Collider collider = sensor.GetCollider(i);
             Alien agent = collider.GetComponentInParent<Alien>();
 
             if (agent != null && agent != this && !agent.IsDead)
@@ -480,10 +471,7 @@ public class Alien : MonoBehaviour
 
     private void SetColor(Color color)
     {
-        foreach (Renderer renderer in _renderers)
-        {
-            renderer.material.color = color;
-        }
+        feedback.SetColor(color);
     }
 
     private void OnDrawGizmosSelected()
@@ -493,6 +481,6 @@ public class Alien : MonoBehaviour
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(transform.position, _viewRadius);
         Gizmos.color = Color.cyan;
-        Gizmos.DrawWireSphere(transform.position, _arriveRadius);
+        Gizmos.DrawWireSphere(transform.position + Vector3.up * 0.1f, _flockingRadius);
     }
 }

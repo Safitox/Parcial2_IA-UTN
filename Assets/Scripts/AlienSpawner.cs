@@ -12,14 +12,18 @@ public class AlienSpawner : MonoBehaviour
         {
             Vector3 spawnPosition;
 
-            if (NavGraph.Instance != null)
+            if (NavGraph.Instance != null && NavGraph.Instance.HuntingNodes.Count > 0)
             {
                 int randomIndex = Random.Range(0, NavGraph.Instance.HuntingNodes.Count);
                 spawnPosition = NavGraph.Instance.HuntingNodes[randomIndex].position;
             }
-            else
+            else if (Universe.Instance != null)
             {
                 spawnPosition = Universe.Instance.GetRandomPositionAwayFrom();
+            }
+            else
+            {
+                spawnPosition = transform.position;
             }
 
             Instantiate(_alienPrefab, spawnPosition, Quaternion.identity, _parent);

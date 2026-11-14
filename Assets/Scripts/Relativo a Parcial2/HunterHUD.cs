@@ -9,8 +9,12 @@ public class HunterHUD : MonoBehaviour
     public TMPro.TextMeshProUGUI gatherText;
     public TMPro.TextMeshProUGUI wolfText;
 
+    float nextUpdate;
+
     void Update()
     {
+        if (Time.time < nextUpdate) return;
+        nextUpdate = Time.time + 0.2f;
         if (hunter == null)
         {
             return;

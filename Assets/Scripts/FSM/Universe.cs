@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class Universe : MonoBehaviour
 {
-    public static Universe Instance {get; private set;}
+    public static Universe Instance { get; private set; }
     [SerializeField] private float _width = 60f;
     [SerializeField] private float _height = 35f;
     [SerializeField] private float _respawnDistanceFromHunter = 10f;

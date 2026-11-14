@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 3420876094090542826}
   - component: {fileID: 2126743302615161252}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: View
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -64,6 +64,9 @@ GameObject:
   - component: {fileID: 454608399720553546}
   - component: {fileID: 871324957704845384}
   - component: {fileID: 5187760032170467710}
+  - component: {fileID: 799000000002}
+  - component: {fileID: 799000000012}
+  - component: {fileID: 799000000022}
   m_Layer: 0
   m_Name: pf_Hunter
   m_TagString: Untagged
@@ -132,10 +135,10 @@ MonoBehaviour:
   _viewRadius: 10
   _speed: 3
   _rotationSpeed: 360
-  _bulletPrefab: {fileID: 3218199885202152779, guid: 4194df81a085bd64c81386931c6b5b9f, type: 3}
+  _bulletPrefab: {fileID: 5952987103732986705, guid: 4194df81a085bd64c81386931c6b5b9f, type: 3}
   _spawnBulletPoint: {fileID: 8212718362848189921}
   _bulletSpeed: 20
-  _interestPrefab: {fileID: 2420862484091759544, guid: 23a685eb6ff5a4c4296bd17f4a83b1ec, type: 3}
+  _interestPrefab: {fileID: 2440214901365024140, guid: 23a685eb6ff5a4c4296bd17f4a83b1ec, type: 3}
   _spawnInterval: 8
 --- !u!1 &4697371488553583559
 GameObject:
@@ -294,3 +297,47 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 57506c4cd6603a04cbbbfe04634df58b, type: 3}
   m_PrefabInstance: {fileID: 4216868456388022810}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &799000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4609580512073746776}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5259e4e979fe44d18f6ab32ef0bb56d2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AgentSensor
+  interval: 0.2
+  detectionLayers:
+    serializedVersion: 2
+    m_Bits: 512
+--- !u!114 &799000000012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4609580512073746776}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d28bd27f99b4e32a7add28a82e963c4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AgentFeedback
+--- !u!114 &799000000022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4609580512073746776}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b3945074f3047799f6679cd8b9bf73f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VisionSensor
+  obstacles:
+    serializedVersion: 2
+    m_Bits: 256
+  eyeHeight: 0.4

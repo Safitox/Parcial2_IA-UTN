@@ -98,15 +98,12 @@ public class AttackP2 : HunterP2State
     public override void Enter()
     {
         target = null;
-
-        if (h.CanAttack)
-            target = h.NearestBoid(false);
+        if (h.CanAttack) target = h.NearestBoid(false);
     }
 
     public override void Update()
     {
-        if (Threat())
-            return;
+        if (Threat()) return;
 
         if (target == null || target.IsDead)
         {
@@ -116,7 +113,7 @@ public class AttackP2 : HunterP2State
 
         float distance = Vector3.Distance(h.transform.position, target.transform.position);
 
-        if (distance > h.ViewRadius)
+        if (distance > h.ViewRadius || !h.CanSeeTarget(target.transform.position))
         {
             h.FSM.ChangeState(h.Search);
             return;
@@ -132,23 +129,9 @@ public class AttackP2 : HunterP2State
         }
         else
         {
-            Vector3 direction = target.transform.position - h.transform.position;
-            Vector3 start = h.transform.position + Vector3.up * 0.4f;
-
-            bool blocked = Physics.Raycast(start, direction.normalized, out RaycastHit hit, direction.magnitude, Physics.AllLayers, QueryTriggerInteraction.Ignore);
-
-            if (blocked && hit.collider.GetComponentInParent<Alien>() != target)
-            {
-                h.Navigate(target.transform.position);
-                h.FollowPath();
-            }
-            else
-            {
-                float prediction = distance / Mathf.Max(1f, h.Speed + target.Velocity.magnitude);
-                Vector3 destination = target.transform.position + target.Velocity * prediction;
-                h.MoveDirect(destination, 1f);
-            }
-
+            float prediction = distance / Mathf.Max(1f, h.Speed + target.Velocity.magnitude);
+            Vector3 destination = target.transform.position + target.Velocity * prediction;
+            h.MoveDirect(destination, 1f);
             return;
         }
 

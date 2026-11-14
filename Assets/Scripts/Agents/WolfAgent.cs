@@ -30,11 +30,18 @@ public class WolfAgent : MonoBehaviour
     float howlCooldown;
     float repathTimer;
     Vector3 lastKnown;
-    Renderer display;
+    AgentFeedback feedback;
+    AgentSensor sensor;
+    VisionSensor vision;
+    int lastVisionScan = -1;
+    HunterNPC visibleCache;
+    [SerializeField] float spawnClearance = 12f;
 
     void Start()
     {
-        display = GetComponent<Renderer>();
+        sensor = GetComponent<AgentSensor>();
+        vision = GetComponent<VisionSensor>();
+        feedback = GetComponent<AgentFeedback>();
 
         if (patrolPoints != null)
         {
@@ -55,7 +62,6 @@ public class WolfAgent : MonoBehaviour
         }
     }
 
-    // Devuelve el Cazador solo si realmente está dentro del campo de visión.
     HunterNPC FindVisibleHunter()
     {
         if (NavGraph.Instance == null)
@@ -63,10 +69,21 @@ public class WolfAgent : MonoBehaviour
             return null;
         }
 
-        Collider[] nearby = Physics.OverlapSphere(transform.position, viewDistance, -1, QueryTriggerInteraction.Ignore);
-
-        foreach (Collider item in nearby)
+        int count = sensor.Scan(viewDistance);
+        if (sensor.ScanCount == lastVisionScan)
         {
+            if (visibleCache == null || visibleCache.IsInactive) return null;
+            if (NavGraph.Instance.IsSafe(visibleCache.transform.position)) return null;
+            return visibleCache;
+        }
+
+        lastVisionScan = sensor.ScanCount;
+        visibleCache = null;
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider item = sensor.GetCollider(i);
+            if (item == null) continue;
             HunterNPC hunter = item.GetComponentInParent<HunterNPC>();
 
             if (hunter == null || hunter.IsInactive)
@@ -79,60 +96,19 @@ public class WolfAgent : MonoBehaviour
                 continue;
             }
 
-            Vector3 direction = hunter.transform.position - transform.position;
-            direction.y = 0f;
-            float distance = direction.magnitude;
-
-            if (distance > viewDistance || distance < 0.001f)
+            if (NavGraph.Instance.SpawnNode != null && Vector3.Distance(hunter.transform.position, NavGraph.Instance.SpawnNode.position) < spawnClearance)
             {
                 continue;
             }
 
-            if (Vector3.Angle(transform.forward, direction) > viewAngle / 2f)
+            if (vision.CanSee(hunter.transform.position, viewDistance, viewAngle))
             {
-                continue;
-            }
-
-            if (HasLineOfSight(hunter))
-            {
+                visibleCache = hunter;
                 return hunter;
             }
         }
 
         return null;
-    }
-
-    bool HasLineOfSight(HunterNPC hunter)
-    {
-        Vector3 origin = transform.position + Vector3.up * 0.4f;
-        Vector3 destination = hunter.transform.position + Vector3.up * 0.4f;
-        Vector3 direction = destination - origin;
-        float distance = direction.magnitude;
-
-        RaycastHit[] hits = Physics.RaycastAll(origin, direction.normalized, distance, -1, QueryTriggerInteraction.Ignore);
-        float nearestDistance = float.MaxValue;
-        Collider nearestCollider = null;
-
-        foreach (RaycastHit hit in hits)
-        {
-            if (hit.collider.GetComponentInParent<WolfAgent>() == this)
-            {
-                continue;
-            }
-
-            if (hit.distance < nearestDistance)
-            {
-                nearestDistance = hit.distance;
-                nearestCollider = hit.collider;
-            }
-        }
-
-        if (nearestCollider == null)
-        {
-            return true;
-        }
-
-        return nearestCollider.GetComponentInParent<HunterNPC>() == hunter;
     }
 
     public bool CanSeeHunter()
@@ -142,7 +118,7 @@ public class WolfAgent : MonoBehaviour
 
     void SendAlert()
     {
-        Collider[] nearby = Physics.OverlapSphere(transform.position, alertDistance, -1, QueryTriggerInteraction.Ignore);
+        Collider[] nearby = Physics.OverlapSphere(transform.position, alertDistance, 1 << 9, QueryTriggerInteraction.Ignore);
         HashSet<WolfAgent> alerted = new HashSet<WolfAgent>();
 
         foreach (Collider item in nearby)
@@ -168,13 +144,18 @@ public class WolfAgent : MonoBehaviour
             return;
         }
 
-        // La alerta transmite una posición, no una referencia permanente al Cazador.
+        if (NavGraph.Instance.SpawnNode != null && Vector3.Distance(position, NavGraph.Instance.SpawnNode.position) < spawnClearance)
+        {
+            return;
+        }
+
         trackedHunter = null;
         lastKnown = position;
         searchTimer = searchDuration;
         searchingArea = false;
         repathTimer = 0f;
         CurrentMode = Mode.Investigate;
+        Debug.Log(name + " recibio alerta: " + lastKnown);
 
         if (!mover.Set(transform.position, lastKnown, true))
         {
@@ -184,26 +165,22 @@ public class WolfAgent : MonoBehaviour
 
     void Update()
     {
-        if (NavGraph.Instance == null)
-        {
-            return;
-        }
-
+        if (NavGraph.Instance == null) return;
         howlCooldown -= Time.deltaTime;
         repathTimer -= Time.deltaTime;
+        CheckHunter();
+        UpdateMovement();
+        UpdateFeedback();
+    }
 
-        // Solo se conserva esta referencia durante una persecución directa.
-        // Se usa para cancelar la persecución cuando el objetivo desaparece o está a salvo.
-        if (trackedHunter != null)
+    void CheckHunter()
+    {
+        if (trackedHunter != null && (trackedHunter.IsInactive || NavGraph.Instance.IsSafe(trackedHunter.transform.position)))
         {
-            if (trackedHunter.IsInactive || NavGraph.Instance.IsSafe(trackedHunter.transform.position))
-            {
-                ReturnToPatrol();
-            }
+            ReturnToPatrol();
         }
 
         HunterNPC visibleHunter = FindVisibleHunter();
-
         if (visibleHunter != null)
         {
             ChaseHunter(visibleHunter);
@@ -214,13 +191,12 @@ public class WolfAgent : MonoBehaviour
             CurrentMode = Mode.Investigate;
             searchTimer = searchDuration;
             searchingArea = false;
-
-            if (!mover.Set(transform.position, lastKnown, true))
-            {
-                ReturnToPatrol();
-            }
+            if (!mover.Set(transform.position, lastKnown, true)) ReturnToPatrol();
         }
+    }
 
+    void UpdateMovement()
+    {
         switch (CurrentMode)
         {
             case Mode.Patrol:
@@ -235,8 +211,6 @@ public class WolfAgent : MonoBehaviour
                 UpdateInvestigation();
                 break;
         }
-
-        UpdateFeedback();
     }
 
     void ChaseHunter(HunterNPC hunter)
@@ -317,34 +291,21 @@ public class WolfAgent : MonoBehaviour
 
         foreach (NavGraph.Node node in NavGraph.Instance.Nodes)
         {
-            if (node.zone == NavGraph.Zone.Safe || node.zone == NavGraph.Zone.Initial)
-            {
-                continue;
-            }
-
+            if (node.zone == NavGraph.Zone.Safe || node.zone == NavGraph.Zone.Initial) continue;
+            if (NavGraph.Instance.SpawnNode != null && Vector3.Distance(node.position, NavGraph.Instance.SpawnNode.position) < spawnClearance) continue;
             float distance = Vector3.Distance(node.position, lastKnown);
-
-            if (distance > 12f || distance < 2f)
-            {
-                continue;
-            }
-
-            List<NavGraph.Node> path = NavGraph.Instance.FindPath(transform.position, node.position, true);
-
-            if (path.Count > 1)
-            {
-                nearby.Add(node);
-            }
+            if (distance >= 2f && distance <= 12f) nearby.Add(node);
         }
 
-        if (nearby.Count == 0)
+        while (nearby.Count > 0)
         {
-            ReturnToPatrol();
-            return;
+            int selected = Random.Range(0, nearby.Count);
+            Vector3 destination = nearby[selected].position;
+            if (mover.Set(transform.position, destination, true)) return;
+            nearby.RemoveAt(selected);
         }
 
-        int selected = Random.Range(0, nearby.Count);
-        mover.Set(transform.position, nearby[selected].position, true);
+        ReturnToPatrol();
     }
 
     void ReturnToPatrol()
@@ -371,22 +332,19 @@ public class WolfAgent : MonoBehaviour
             mover.DebugDraw(Color.red);
         }
 
-        if (display != null)
+        switch (CurrentMode)
         {
-            switch (CurrentMode)
-            {
-                case Mode.Pursue:
-                    display.material.color = Color.red;
-                    break;
+            case Mode.Pursue:
+                feedback.SetColor(Color.red);
+                break;
 
-                case Mode.Investigate:
-                    display.material.color = Color.yellow;
-                    break;
+            case Mode.Investigate:
+                feedback.SetColor(Color.yellow);
+                break;
 
-                default:
-                    display.material.color = new Color(0.6f, 0.2f, 0.1f);
-                    break;
-            }
+            default:
+                feedback.SetColor(new Color(0.6f, 0.2f, 0.1f));
+                break;
         }
 
         if (CurrentMode != Mode.Patrol)

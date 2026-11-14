@@ -21,22 +21,29 @@ public class HunterNPC : MonoBehaviour
     [SerializeField] float _viewRadius = 10f;
     [SerializeField] float _speed = 3.6f;
     [SerializeField] float _rotationSpeed = 250f;
-    [SerializeField] GameObject _bulletPrefab;
+    [SerializeField] Bullet _bulletPrefab;
     [SerializeField] Transform _spawnBulletPoint;
     [SerializeField] float _bulletSpeed = 20f;
 
     [Header("Intereses")]
-    [SerializeField] GameObject _interestPrefab;
+    [SerializeField] ObjectOfInterest _interestPrefab;
     [SerializeField] float _spawnInterval = 8f;
 
     float attackTimer = 999f;
     float spawnTimer;
     Vector3 previous;
     bool _visible = true;
+    AgentSensor sensor;
+    VisionSensor vision;
+    int lastPerceptionScan = -1;
+    bool wolfVisible;
+    Alien nearestAlive;
+    Alien nearestDead;
+    AgentFeedback feedback;
     Renderer[] renderers;
     Collider[] colliders;
 
-    readonly List<GameObject> spawned = new List<GameObject>();
+    readonly List<ObjectOfInterest> spawned = new List<ObjectOfInterest>();
     readonly MoverEnGraph mover = new MoverEnGraph();
     readonly FiniteStateMachine fsm = new FiniteStateMachine();
 
@@ -45,10 +52,6 @@ public class HunterNPC : MonoBehaviour
         get { return fsm; }
     }
     public HunterState Search { get; private set; }
-    public HunterState Patrol
-    {
-        get { return Search; }
-    }
     public HunterState Attack { get; private set; }
     public HunterState Gather { get; private set; }
     public HunterState Flee { get; private set; }
@@ -63,7 +66,7 @@ public class HunterNPC : MonoBehaviour
     {
         get { return _rotationSpeed; }
     }
-    public GameObject BulletPrefab
+    public Bullet BulletPrefab
     {
         get { return _bulletPrefab; }
     }
@@ -94,6 +97,9 @@ public class HunterNPC : MonoBehaviour
 
     void Awake()
     {
+        sensor = GetComponent<AgentSensor>();
+        vision = GetComponent<VisionSensor>();
+        feedback = GetComponent<AgentFeedback>();
         renderers = GetComponentsInChildren<Renderer>();
         colliders = GetComponentsInChildren<Collider>();
     }
@@ -129,6 +135,13 @@ public class HunterNPC : MonoBehaviour
         fsm.Update();
         Velocity = (transform.position - previous) / Mathf.Max(Time.deltaTime, 0.0001f);
 
+        UpdateFeedback();
+
+        mover.DebugDraw(Color.green);
+    }
+
+    void UpdateFeedback()
+    {
         if (fsm.CurrentState == Dead)
         {
             SetColor(Color.black);
@@ -154,62 +167,60 @@ public class HunterNPC : MonoBehaviour
             SetColor(Color.white);
         }
 
-        mover.DebugDraw(Color.green);
+    }
+
+    void UpdatePerception()
+    {
+        int count = sensor.Scan(_viewRadius);
+        if (sensor.ScanCount == lastPerceptionScan) return;
+        lastPerceptionScan = sensor.ScanCount;
+        wolfVisible = false;
+        nearestAlive = null;
+        nearestDead = null;
+        float aliveDistance = _viewRadius * _viewRadius;
+        float deadDistance = aliveDistance;
+
+        for (int i = 0; i < count; i++)
+        {
+            Collider item = sensor.GetCollider(i);
+            if (item == null) continue;
+
+            WolfAgent wolf = item.GetComponentInParent<WolfAgent>();
+            if (wolf != null && CanSee(item.bounds.center, wolf.transform)) wolfVisible = true;
+
+            Alien boid = item.GetComponentInParent<Alien>();
+            if (boid == null || boid.IsCollected) continue;
+            Vector3 difference = boid.transform.position - transform.position;
+            float distance = difference.sqrMagnitude;
+            if (!CanSee(item.bounds.center, boid.transform)) continue;
+
+            if (boid.IsDead && distance < deadDistance)
+            {
+                nearestDead = boid;
+                deadDistance = distance;
+            }
+            else if (!boid.IsDead && distance < aliveDistance)
+            {
+                nearestAlive = boid;
+                aliveDistance = distance;
+            }
+        }
     }
 
     public bool DetectWolf()
     {
-        Collider[] nearby = Physics.OverlapSphere(transform.position, _viewRadius, -1, QueryTriggerInteraction.Ignore);
-
-        foreach (Collider item in nearby)
-        {
-            WolfAgent wolf = item.GetComponentInParent<WolfAgent>();
-
-            if (wolf == null)
-            {
-                continue;
-            }
-
-            if (CanSee(item.bounds.center, wolf.transform))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        UpdatePerception();
+        return wolfVisible;
     }
 
     bool CanSee(Vector3 targetPosition, Transform target)
     {
-        Vector3 origin = transform.position + Vector3.up * 0.4f;
-        Vector3 direction = targetPosition - origin;
-        float distance = direction.magnitude;
+        return vision.CanSee(targetPosition - Vector3.up * 0.4f, _viewRadius);
+    }
 
-        if (distance <= 0.001f)
-        {
-            return true;
-        }
-
-        RaycastHit[] hits = Physics.RaycastAll(origin, direction.normalized, distance, -1, QueryTriggerInteraction.Ignore);
-
-        foreach (RaycastHit hit in hits)
-        {
-            Transform hitTransform = hit.collider.transform;
-
-            if (hitTransform.IsChildOf(transform))
-            {
-                continue;
-            }
-
-            if (hitTransform.IsChildOf(target))
-            {
-                continue;
-            }
-
-            return false;
-        }
-
-        return true;
+    public bool CanSeeTarget(Vector3 position)
+    {
+        return vision.CanSee(position, _viewRadius);
     }
 
     public void CapturedByWolf()
@@ -287,50 +298,15 @@ public class HunterNPC : MonoBehaviour
         spawnTimer = 0f;
         int index = Random.Range(0, nodes.Count);
         Vector3 position = nodes[index].position;
-        GameObject obj = Instantiate(_interestPrefab, position, Quaternion.identity);
-        spawned.Add(obj);
-
-        ObjectOfInterest interest = obj.GetComponent<ObjectOfInterest>();
-
-        if (interest != null)
-        {
-            ObjectsOfInterestManager.AddItem(interest);
-        }
+        ObjectOfInterest interest = Instantiate(_interestPrefab, position, Quaternion.identity);
+        spawned.Add(interest);
     }
 
     public Alien NearestBoid(bool dead)
     {
-        Alien closest = null;
-        float minDistance = _viewRadius * _viewRadius;
-        Collider[] nearby = Physics.OverlapSphere(transform.position, _viewRadius, -1, QueryTriggerInteraction.Ignore);
-
-        foreach (Collider item in nearby)
-        {
-            Alien boid = item.GetComponentInParent<Alien>();
-
-            if (boid == null || boid.IsDead != dead || boid.IsCollected)
-            {
-                continue;
-            }
-
-            Vector3 direction = boid.transform.position - transform.position;
-            float distance = direction.sqrMagnitude;
-
-            if (distance >= minDistance)
-            {
-                continue;
-            }
-
-            if (!CanSee(item.bounds.center, boid.transform))
-            {
-                continue;
-            }
-
-            minDistance = distance;
-            closest = boid;
-        }
-
-        return closest;
+        UpdatePerception();
+        if (dead) return nearestDead;
+        return nearestAlive;
     }
 
     public void Navigate(Vector3 destination)
@@ -368,24 +344,13 @@ public class HunterNPC : MonoBehaviour
         }
 
         Vector3 direction = (target.transform.position - _spawnBulletPoint.position).normalized;
-        GameObject bulletObject = Instantiate(_bulletPrefab, _spawnBulletPoint.position, Quaternion.LookRotation(direction));
-        Bullet bullet = bulletObject.GetComponent<Bullet>();
-
-        if (bullet != null)
-        {
-            bullet.Init(direction, _bulletSpeed, 10f);
-        }
+        Bullet bullet = Instantiate(_bulletPrefab, _spawnBulletPoint.position, Quaternion.LookRotation(direction));
+        bullet.Init(direction, _bulletSpeed, 10f);
     }
 
     public void SetColor(Color color)
     {
-        foreach (Renderer item in renderers)
-        {
-            if (item != null && item.enabled)
-            {
-                item.material.color = color;
-            }
-        }
+        feedback.SetColor(color);
     }
 
     void OnDrawGizmosSelected()

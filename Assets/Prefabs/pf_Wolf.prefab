@@ -11,7 +11,10 @@ GameObject:
   - component: {fileID: 2000000002}
   - component: {fileID: 2000000006}
   - component: {fileID: 2000000005}
-  m_Layer: 0
+  - component: {fileID: 799000000003}
+  - component: {fileID: 799000000013}
+  - component: {fileID: 799000000023}
+  m_Layer: 9
   m_Name: pf_Wolf
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -74,7 +77,8 @@ MonoBehaviour:
   viewAngle: 110
   captureRadius: 1.5
   searchDuration: 5
-  patrolIndex: 0
+  alertDistance: 100
+  spawnClearance: 12
   patrolPoints: []
 --- !u!1001 &2833977448786754964
 PrefabInstance:
@@ -150,3 +154,47 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: c006cdc47a384a643830790315569de7, type: 3}
   m_PrefabInstance: {fileID: 2833977448786754964}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &799000000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5259e4e979fe44d18f6ab32ef0bb56d2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AgentSensor
+  interval: 0.2
+  detectionLayers:
+    serializedVersion: 2
+    m_Bits: 512
+--- !u!114 &799000000013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d28bd27f99b4e32a7add28a82e963c4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AgentFeedback
+--- !u!114 &799000000023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b3945074f3047799f6679cd8b9bf73f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VisionSensor
+  obstacles:
+    serializedVersion: 2
+    m_Bits: 256
+  eyeHeight: 0.4

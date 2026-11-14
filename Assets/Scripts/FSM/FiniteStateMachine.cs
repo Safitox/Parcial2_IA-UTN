@@ -5,7 +5,7 @@ public class FiniteStateMachine
 {
     private HunterState _currentState;
     public HunterState CurrentState { get; private set; }
-    private HashSet<HunterState> _allStates = new();
+    private HashSet<HunterState> _allStates = new HashSet<HunterState>();
     public void AddState(HunterState state)
     {
         if (!_allStates.Contains(state))
@@ -20,7 +20,7 @@ public class FiniteStateMachine
             return;
         }
 
-        _currentState?.Exit();
+        if (_currentState != null) _currentState.Exit();
         _currentState = state;
         _currentState.Enter();
         CurrentState = state;

@@ -5,33 +5,34 @@ public class ObjectOfInterest : MonoBehaviour
     [SerializeField] private float _flickSpeed = 5f;
     private float _flickTimer;
     private bool _flicker;
+    private MeshRenderer display;
     public float health = 5f;
-    public void TakeDamage(float dmg)
+
+    void Awake()
     {
-        health -= dmg;
-        if (health <= 0)
-            Destroy(gameObject);
+        display = GetComponent<MeshRenderer>();
     }
 
-    private void Update()
+    public void TakeDamage(float damage)
+    {
+        health -= damage;
+        if (health <= 0f) Destroy(gameObject);
+    }
+
+    void Update()
     {
         _flickTimer += Time.deltaTime;
-        if (_flickTimer >= _flickSpeed)
+        if (_flickTimer < _flickSpeed) return;
+        _flickTimer = 0f;
+        _flicker = !_flicker;
+        if (display == null) return;
+        if (_flicker)
         {
-            _flickTimer = 0f;
-            _flicker = !_flicker;
-            GetComponent<MeshRenderer>().material.color = _flicker ? Color.red : Color.white;
+            display.material.color = Color.red;
         }
-
-    }
-
-    private void OnEnable()
-    {
-        ObjectsOfInterestManager.Items.Add(this);
-    }
-
-    private void OnDisable()
-    {
-        ObjectsOfInterestManager.Items.Remove(this);
+        else
+        {
+            display.material.color = Color.white;
+        }
     }
 }

@@ -38,10 +38,8 @@ public class MoverEnGraph
 
     public bool Move(Transform agent, float speed, float turnSpeed = 360f)
     {
-        if (index >= Path.Count)
-        {
-            return true;
-        }
+        if (Path.Count == 0) return false;
+        if (index >= Path.Count) return true;
 
         Vector3 goal = Path[index].position;
         goal.y = agent.position.y;
