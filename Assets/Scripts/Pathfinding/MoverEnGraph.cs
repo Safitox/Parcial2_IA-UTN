@@ -52,7 +52,15 @@ public class MoverEnGraph
             return index >= Path.Count;
         }
 
-        agent.position = Vector3.MoveTowards(agent.position, goal, speed * Time.deltaTime);
+        Vector3 nextPosition = Vector3.MoveTowards(agent.position, goal, speed * Time.deltaTime);
+
+        if (NavGraph.Instance != null && !NavGraph.Instance.CanMove(agent.position, nextPosition))
+        {
+            Clear();
+            return false;
+        }
+
+        agent.position = nextPosition;
 
         if (direction.sqrMagnitude > 0.001f)
         {

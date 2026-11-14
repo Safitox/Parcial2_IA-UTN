@@ -81,10 +81,39 @@ MonoBehaviour:
   _objectOfInterestDamage: 1
   _objectOfInterestDamageInterval: 1
   _distSquaredToobjectOfInterestDetection: 1.5
+  _flockingRadius: 5
   _separationRadius: 2
   _separationWeight: 1.5
   _cohesionWeight: 0.8
   _alignmentWeight: 1
+--- !u!114 &799000000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1589787941425986375}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5259e4e979fe44d18f6ab32ef0bb56d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentSensor
+  interval: 0.2
+  detectionLayers:
+    serializedVersion: 2
+    m_Bits: 2560
+--- !u!114 &799000000011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1589787941425986375}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d28bd27f99b4e32a7add28a82e963c4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AgentFeedback
 --- !u!1001 &9030905861419950062
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -167,31 +196,3 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a030ffbc23dec2146ad4ba2f38f84ddb, type: 3}
   m_PrefabInstance: {fileID: 9030905861419950062}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &799000000001
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1589787941425986375}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5259e4e979fe44d18f6ab32ef0bb56d2, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::AgentSensor
-  interval: 0.2
-  detectionLayers:
-    serializedVersion: 2
-    m_Bits: 512
---- !u!114 &799000000011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1589787941425986375}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9d28bd27f99b4e32a7add28a82e963c4, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::AgentFeedback

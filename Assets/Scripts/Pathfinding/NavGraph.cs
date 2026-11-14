@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 using UnityEngine;
 
 public class NavGraph : MonoBehaviour
@@ -19,23 +20,20 @@ public class NavGraph : MonoBehaviour
     [SerializeField] int rows = 11;
     [SerializeField] float cellSize = 4f;
     [SerializeField] float obstacleHeight = 0.9f;
+    [SerializeField] float agentRadius = 0.45f;
     [SerializeField] LayerMask obstacles = 1 << 8;
     [SerializeField] bool showGraph = true;
 
-    [Header("Zonas (coordenadas locales X/Z)")]
-    [SerializeField] Vector2 huntingCenter = new Vector2(0f, 12f);
-    [SerializeField] Vector2 huntingSize = new Vector2(20f, 20f);
-    [SerializeField] Vector2 initialCenter = new Vector2(-24f, 0f);
-    [SerializeField] Vector2 exitCenter = new Vector2(24f, 0f);
-    [SerializeField] Vector2 safeCenterA = new Vector2(-24f, -20f);
-    [SerializeField] Vector2 safeCenterB = new Vector2(24f, 20f);
-    [SerializeField] Vector2 safeSize = new Vector2(12f, 5f);
+    [Header("Zonas de la escena")]
+    [SerializeField] MapZone[] zones;
 
     public List<Node> Nodes = new List<Node>();
     public List<Node> SafeNodes = new List<Node>();
     public List<Node> HuntingNodes = new List<Node>();
     public Node SpawnNode;
     public Node ExitNode;
+
+
 
     void Awake()
     {
@@ -45,6 +43,7 @@ public class NavGraph : MonoBehaviour
 
     public void BuildGraph()
     {
+        Physics.SyncTransforms();
         Nodes.Clear();
         SafeNodes.Clear();
         HuntingNodes.Clear();
@@ -57,16 +56,17 @@ public class NavGraph : MonoBehaviour
             {
                 Vector3 local = new Vector3((x - (columns - 1) * 0.5f) * cellSize, 0f, (z - (rows - 1) * 0.5f) * cellSize);
                 Vector3 position = transform.TransformPoint(local);
-                Vector3 check = position + Vector3.up * obstacleHeight;
+                Vector3 bottom = position + Vector3.up * agentRadius;
+                Vector3 top = position + Vector3.up * Mathf.Max(obstacleHeight, agentRadius);
 
-                if (Physics.CheckBox(check, new Vector3(cellSize * 0.16f, 0.35f, cellSize * 0.16f), Quaternion.identity, obstacles, QueryTriggerInteraction.Ignore))
+                if (Physics.CheckCapsule(bottom, top, agentRadius, obstacles, QueryTriggerInteraction.Ignore))
                 {
                     continue;
                 }
 
                 Node node = new Node();
                 node.position = position;
-                node.zone = GetZone(local);
+                node.zone = GetZone(position);
                 Nodes.Add(node);
 
                 if (node.zone == Zone.Hunting) HuntingNodes.Add(node);
@@ -78,7 +78,7 @@ public class NavGraph : MonoBehaviour
 
         if (Application.isPlaying && (SpawnNode == null || ExitNode == null || HuntingNodes.Count == 0 || SafeNodes.Count < 2))
         {
-            Debug.LogError("Grafo: revisar zonas de inicio, coto, salida y zonas seguras.");
+            Debug.LogError("Grafo: revisar las zonas asignadas en el Inspector.");
         }
 
         for (int i = 0; i < Nodes.Count; i++)
@@ -91,10 +91,7 @@ public class NavGraph : MonoBehaviour
 
                 if (distance > cellSize * 1.05f) continue;
 
-                Vector3 start = first.position + Vector3.up * obstacleHeight;
-                Vector3 end = second.position + Vector3.up * obstacleHeight;
-
-                if (!Physics.Linecast(start, end, obstacles, QueryTriggerInteraction.Ignore))
+                if (CanMove(first.position, second.position, agentRadius))
                 {
                     first.neighbors.Add(second);
                     second.neighbors.Add(first);
@@ -103,42 +100,84 @@ public class NavGraph : MonoBehaviour
         }
     }
 
-    Zone GetZone(Vector3 local)
+    public bool CanMove(Vector3 origin, Vector3 destination, float radius = 0.4f)
     {
-        Vector2 point = new Vector2(local.x, local.z);
-        if (InArea(point, initialCenter, Vector2.one * cellSize)) return Zone.Initial;
-        if (InArea(point, exitCenter, Vector2.one * cellSize)) return Zone.Exit;
-        if (InArea(point, safeCenterA, safeSize) || InArea(point, safeCenterB, safeSize)) return Zone.Safe;
-        if (InArea(point, huntingCenter, huntingSize)) return Zone.Hunting;
+        Vector3 direction = destination - origin;
+        direction.y = 0f;
+        float distance = direction.magnitude;
+
+        Vector3 bottom = origin + Vector3.up * radius;
+        Vector3 top = origin + Vector3.up * Mathf.Max(obstacleHeight, radius);
+        Vector3 endBottom = destination + Vector3.up * radius;
+        Vector3 endTop = destination + Vector3.up * Mathf.Max(obstacleHeight, radius);
+
+        if (Physics.CheckCapsule(bottom, top, radius, obstacles, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        if (Physics.CheckCapsule(endBottom, endTop, radius, obstacles, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        if (distance <= 0.001f)
+        {
+            return true;
+        }
+
+        RaycastHit hit;
+        bool blocked = Physics.CapsuleCast(bottom, top, radius, direction.normalized, out hit, distance, obstacles, QueryTriggerInteraction.Ignore);
+        return !blocked;
+    }
+
+    Zone GetZone(Vector3 position)
+    {
+        if (InsideZone(position, Zone.Initial)) return Zone.Initial;
+        if (InsideZone(position, Zone.Exit)) return Zone.Exit;
+        if (InsideZone(position, Zone.Safe)) return Zone.Safe;
+        if (InsideZone(position, Zone.Hunting)) return Zone.Hunting;
         return Zone.Normal;
     }
 
-    bool InArea(Vector2 point, Vector2 center, Vector2 size)
+    bool InsideZone(Vector3 position, Zone type)
     {
-        return Mathf.Abs(point.x - center.x) <= size.x * 0.5f && Mathf.Abs(point.y - center.y) <= size.y * 0.5f;
+        if (zones == null) return false;
+
+        foreach (MapZone area in zones)
+        {
+            if (area != null && area.zone == type && area.Contains(position))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public bool IsSafe(Vector3 position)
     {
-        Vector3 local = transform.InverseTransformPoint(position);
-        Vector2 point = new Vector2(local.x, local.z);
-        return InArea(point, safeCenterA, safeSize) || InArea(point, safeCenterB, safeSize);
+        return InsideZone(position, Zone.Safe);
     }
 
     public bool InHunting(Vector3 position)
     {
-        Vector3 local = transform.InverseTransformPoint(position);
-        return InArea(new Vector2(local.x, local.z), huntingCenter, huntingSize);
+        return InsideZone(position, Zone.Hunting);
     }
 
     public Vector3 ConfineToHunting(Vector3 position, ref Vector3 velocity)
     {
-        Vector3 local = transform.InverseTransformPoint(position);
-        float x = Mathf.Clamp(local.x, huntingCenter.x - huntingSize.x * 0.5f + 0.2f, huntingCenter.x + huntingSize.x * 0.5f - 0.2f);
-        float z = Mathf.Clamp(local.z, huntingCenter.y - huntingSize.y * 0.5f + 0.2f, huntingCenter.y + huntingSize.y * 0.5f - 0.2f);
-        if (x != local.x) velocity.x = -velocity.x;
-        if (z != local.z) velocity.z = -velocity.z;
-        return transform.TransformPoint(new Vector3(x, local.y, z));
+        if (zones == null) return position;
+
+        foreach (MapZone area in zones)
+        {
+            if (area != null && area.zone == Zone.Hunting)
+            {
+                return area.Confine(position, ref velocity);
+            }
+        }
+
+        return position;
     }
 
     public Node Nearest(Vector3 position, bool wolf = false)
@@ -176,20 +215,35 @@ public class NavGraph : MonoBehaviour
     {
         if (!showGraph) return;
         if (!Application.isPlaying) BuildGraph();
+
         foreach (Node node in Nodes)
         {
             switch (node.zone)
             {
-                case Zone.Hunting: Gizmos.color = Color.green; break;
-                case Zone.Safe: Gizmos.color = Color.cyan; break;
-                case Zone.Initial: Gizmos.color = Color.magenta; break;
-                case Zone.Exit: Gizmos.color = Color.yellow; break;
-                default: Gizmos.color = Color.gray; break;
+                case Zone.Hunting:
+                    Gizmos.color = Color.green;
+                    break;
+                case Zone.Safe:
+                    Gizmos.color = Color.cyan;
+                    break;
+                case Zone.Initial:
+                    Gizmos.color = Color.magenta;
+                    break;
+                case Zone.Exit:
+                    Gizmos.color = Color.yellow;
+                    break;
+                default:
+                    Gizmos.color = Color.gray;
+                    break;
             }
 
             Gizmos.DrawSphere(node.position + Vector3.up * 0.15f, 0.23f);
             Gizmos.color = Color.blue;
-            foreach (Node next in node.neighbors) Gizmos.DrawLine(node.position + Vector3.up * 0.15f, next.position + Vector3.up * 0.15f);
+
+            foreach (Node next in node.neighbors)
+            {
+                Gizmos.DrawLine(node.position + Vector3.up * 0.15f, next.position + Vector3.up * 0.15f);
+            }
         }
     }
 }

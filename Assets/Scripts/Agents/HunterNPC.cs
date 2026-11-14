@@ -330,7 +330,14 @@ public class HunterNPC : MonoBehaviour
         }
 
         float distance = Mathf.Min(_speed * Time.deltaTime, direction.magnitude);
-        transform.position += direction.normalized * distance;
+        Vector3 nextPosition = transform.position + direction.normalized * distance;
+
+        if (NavGraph.Instance != null && !NavGraph.Instance.CanMove(transform.position, nextPosition))
+        {
+            return false;
+        }
+
+        transform.position = nextPosition;
         transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(direction), _rotationSpeed * Time.deltaTime);
         return false;
     }

@@ -23,12 +23,15 @@ public class Bullet : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        if (other.CompareTag("zONA"))
+        {
+            return; 
+        }
         Alien agent = other.GetComponent<Alien>();
         if (agent != null)
         {
             agent.TakeDamage(_damage);
         }
-
         Destroy(gameObject);
     }
 }
